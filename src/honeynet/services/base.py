@@ -115,6 +115,7 @@ class Connection:
         self.opened = time.monotonic()
         self.bytes_in = 0
         self.bytes_out = 0
+        self.leftover = b""          # bytes read past the end of the previous protocol message
 
     def emit(self, event: str, **data: Any):
         return self.svc.events.emit(event, self.ip, src_port=self.port, dst_port=self.dst_port,
