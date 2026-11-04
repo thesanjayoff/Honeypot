@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "honeynet"
+version = "0.1.0"
+description = "Personal medium-interaction honeypot network with malware analysis and attack dashboard"
+requires-python = ">=3.11"
+dependencies = ["PyYAML>=6.0"]
+
+[project.optional-dependencies]
+honeypot = ["asyncssh>=2.14", "cryptography>=42"]
+dashboard = ["fastapi>=0.110", "uvicorn>=0.29", "maxminddb>=2.5"]
+analysis = ["capstone>=5.0", "pyelftools>=0.31", "pefile>=2023.2.7"]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "httpx>=0.27",
+       "asyncssh>=2.14", "cryptography>=42", "fastapi>=0.110", "uvicorn>=0.29",
+       "maxminddb>=2.5", "capstone>=5.0", "pyelftools>=0.31", "pefile>=2023.2.7"]
+
+[project.scripts]
+honeynet = "honeynet.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+honeynet = ["dashboard/static/**/*", "shell/data/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["src"]
