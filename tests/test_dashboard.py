@@ -219,7 +219,7 @@ def test_pipeline_summary_charts_and_tops(populated):
 
 def test_session_replay_and_ip_profile(populated):
     db = populated.db
-    sessions = q.sessions_list(db, 50, with_commands=True)
+    sessions = [x for x in q.sessions_list(db, 50, with_commands=True) if x["commands"] > 0]
     assert sessions
     d = q.session_detail(db, sessions[0]["id"])
     kinds = [f["event"] for f in d["frames"]]
@@ -537,3 +537,41 @@ def test_retention_prune_keeps_samples_and_iocs(populated):
     n = db.prune(time.time() + 10)
     assert n > 0 and db.scalar("SELECT COUNT(*) FROM events") == 0
     assert db.scalar("SELECT COUNT(*) FROM samples") == before_samples and db.scalar("SELECT COUNT(*) FROM iocs") > 0
+
+
+# ----------------------------------------------------------------------------- static frontend
+
+STATIC = Path(__file__).resolve().parents[1] / "src" / "honeynet" / "dashboard" / "static"
+
+
+def test_frontend_never_builds_html_from_strings():
+    """Attacker-controlled text must only ever reach the DOM through textContent/text nodes."""
+    banned = ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "setAttribute(\"on", "srcdoc", "javascript:")
+    files = [*STATIC.glob("*.js"), *STATIC.glob("js/**/*.js"), *STATIC.glob("*.html")]
+    assert len(files) >= 8
+    for f in files:
+        text = f.read_text("utf-8")
+        for b in banned:
+            assert b not in text, f"{f.name} uses {b}"
+    html = (STATIC / "index.html").read_text("utf-8")
+    assert "<script>" not in html and " style=" not in html and "onclick=" not in html     # CSP forbids inline script/style
+
+
+def test_frontend_has_no_external_requests():
+    import re
+
+    for f in [*STATIC.glob("*.js"), *STATIC.glob("js/**/*.js"), *STATIC.glob("*.html"), *STATIC.glob("*.css")]:
+        text = f.read_text("utf-8")
+        for m in re.finditer(r"""(?:src|href|url\(|fetch\(|import\s+[^;]*from)\s*=?\s*["']?(https?:)?//([a-z0-9.-]+)""", text):
+            host = m.group(2)
+            assert host in ("attack.mitre.org", "www.w3.org"), f"{f.name} references {host}"
+
+
+def test_static_files_served_with_module_safe_types(client):
+    r = client.get("/app.js")
+    assert r.status_code == 200 and r.headers["content-type"].split(";")[0] in ("text/javascript", "application/javascript")
+    assert client.get("/js/util.js").status_code == 200
+    assert client.get("/style.css").headers["content-type"].startswith("text/css")
+    assert client.get("/vendor/countries-110m.json").status_code == 200
+    assert client.get("/").text.count("<script") == 1
+    assert client.get("/../../etc/passwd").status_code in (400, 404)

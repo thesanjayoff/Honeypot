@@ -8,3 +8,4 @@ data/
 .env
 *.mmdb
 config/honeynet.yml
+.pytmp/

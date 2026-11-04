@@ -181,8 +181,25 @@ class Ingestor:
             if self.on_new_rule:
                 self.on_new_rule(r)
         if self.on_events and stored:
-            self.on_events([self.public_event(e) for e in stored[-200:]])
+            self.on_events(self._public(stored[-200:]))
         return len(stored)
+
+    def _public(self, events: list[Event]) -> list[dict]:
+        """Events as shown to live viewers, with the source's coarse location/classification attached."""
+        ips = sorted({e.src_ip for e in events})
+        geo: dict[str, dict] = {}
+        if ips:
+            marks = ",".join("?" * len(ips))
+            for r in self.db.query(f"SELECT ip, country, lat, lon, classification FROM ip_info WHERE ip IN ({marks})", ips):
+                geo[r["ip"]] = r
+        out = []
+        for e in events:
+            d = self.public_event(e)
+            g = geo.get(e.src_ip)
+            if g:
+                d.update({"country": g["country"], "lat": g["lat"], "lon": g["lon"], "classification": g["classification"]})
+            out.append(d)
+        return out
 
     @staticmethod
     def public_event(ev: Event) -> dict:

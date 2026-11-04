@@ -12,6 +12,7 @@ Security posture (the dashboard sits next to a honeypot full of hostile data):
 from __future__ import annotations
 
 import asyncio
+import mimetypes
 import json
 import logging
 import re
@@ -34,6 +35,10 @@ from .db import DB
 from .enrich import ExternalLookups, GeoResolver
 from .ingest import Ingestor
 from .samples import SHA_RE, AnalysisImporter, load_report
+
+# Windows registries sometimes map .js to text/plain, which breaks module scripts under nosniff
+for _ext, _mt in ((".js", "text/javascript"), (".css", "text/css"), (".json", "application/json"), (".svg", "image/svg+xml")):
+    mimetypes.add_type(_mt, _ext)
 
 log = logging.getLogger("honeynet.dashboard")
 STATIC_DIR = Path(__file__).parent / "static"
@@ -182,6 +187,8 @@ def create_app(s: Settings, *, start_background: bool = True) -> FastAPI:
             resp.headers.setdefault(k, v)
         if request.url.path.startswith("/api"):
             resp.headers["Cache-Control"] = "no-store"
+        else:
+            resp.headers.setdefault("Cache-Control", "no-cache")      # always revalidate (ETag) - assets change with upgrades
         return resp
 
     def authed(request: Request) -> None:
