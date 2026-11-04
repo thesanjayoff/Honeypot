@@ -93,6 +93,28 @@ def sanitize_obj(value: Any, *, depth: int = 0, max_len: int = MAX_STR) -> Any:
     return sanitize_text(value, max_len)
 
 
+def sanitize_deep(value: Any, *, max_len: int = MAX_STR, max_items: int = 5000, max_depth: int = 8) -> Any:
+    """Like :func:`sanitize_obj` but with generous bounds and untouched key names.
+
+    Used for analysis reports, whose lists (IOCs, strings, snippets) are legitimately long.
+    Every string - keys included - still has control/bidi characters replaced.
+    """
+    if value is None or isinstance(value, (bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if value == value and abs(value) != float("inf") else 0.0
+    if isinstance(value, (str, bytes, bytearray, memoryview)):
+        return sanitize_text(value, max_len)
+    if max_depth <= 0:
+        return "[max-depth]"
+    if isinstance(value, dict):
+        return {sanitize_text(k, 120): sanitize_deep(v, max_len=max_len, max_items=max_items, max_depth=max_depth - 1)
+                for k, v in list(value.items())[:max_items]}
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return [sanitize_deep(v, max_len=max_len, max_items=max_items, max_depth=max_depth - 1) for v in list(value)[:max_items]]
+    return sanitize_text(value, max_len)
+
+
 # --------------------------------------------------------------------------- outputs
 
 
