@@ -169,6 +169,8 @@ class EventWriter:
         self._suppressed: dict[str, int] = {}
         self._writes = 0
         self._disk_full = False
+        self._fd: int | None = None
+        self._fd_ino = -1
         self.dropped_ignored = 0
         self.listeners: list = []   # optional in-process taps (used by tests / dev mode)
 
@@ -201,6 +203,20 @@ class EventWriter:
                 fn(ev)
             except Exception:  # noqa: BLE001 - taps must never break the honeypot
                 pass
+        return ev
+
+    def emit_at(self, ts: float, event: str, src_ip: str, *, src_port: int | None = None, dst_port: int | None = None,
+                session: str | None = None, **data: Any) -> Event | None:
+        """Explicit-timestamp variant for the simulator's backfill (skips the flood limiter, keeps sanitising/redaction)."""
+        ip = normalize_ip(src_ip) or "0.0.0.0"
+        if self.redactor.is_ignored(ip):
+            self.dropped_ignored += 1
+            return None
+        clean = sanitize_obj(data)
+        if self.redactor.ignore_raw or self.redactor.secrets:
+            clean = self.redactor.scrub_obj(clean)
+        ev = Event(new_id(), float(ts), self.service, event, ip, _int_or_none(src_port), _int_or_none(dst_port), session, clean)
+        self._write(ev)
         return ev
 
     # -- internals -------------------------------------------------------------
@@ -236,15 +252,58 @@ class EventWriter:
             return
         line = (ev.to_json() + "\n").encode("ascii")
         try:
-            if self.path.exists() and self.path.stat().st_size >= self.rotate_bytes:
-                self._rotate()
-            fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o640)
-            try:
-                os.write(fd, line)
-            finally:
-                os.close(fd)
+            fd = self._current_fd()
+            os.write(fd, line)
         except OSError:
+            self._close_fd()
             self._disk_full = True
+
+    def _current_fd(self) -> int:
+        """Append handle kept open between events (reopened after rotation/removal).
+
+        Re-opening per event costs a full close-time scan on some platforms (Windows AV), so the
+        handle is cached and validated with one cheap stat per write.
+        """
+        try:
+            st = os.stat(self.path)
+        except FileNotFoundError:
+            self._close_fd()
+            return self._open_fd()
+        if self._fd is not None and st.st_ino == self._fd_ino and st.st_size < self.rotate_bytes:
+            return self._fd
+        if st.st_size >= self.rotate_bytes:
+            self._close_fd()
+            self._rotate()
+            return self._open_fd()
+        self._close_fd()
+        return self._open_fd()
+
+    def _open_fd(self) -> int:
+        fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o640)
+        self._fd = fd
+        try:
+            self._fd_ino = os.fstat(fd).st_ino
+        except OSError:
+            self._fd_ino = -1
+        return fd
+
+    def _close_fd(self) -> None:
+        fd, self._fd = self._fd, None
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def close(self) -> None:
+        with self._lock:
+            self._close_fd()
+
+    def __del__(self) -> None:  # pragma: no cover - best effort
+        try:
+            self._close_fd()
+        except Exception:  # noqa: BLE001
+            pass
 
     def _rotate(self) -> None:
         old = self.path.with_suffix(".jsonl.1")

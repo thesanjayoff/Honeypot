@@ -70,6 +70,11 @@ class Settings:
     dashboard_password: str = ""
     dashboard_password_hash: str = ""
     dashboard_secret: str = ""
+    dashboard_allowed_hosts: list[str] = field(default_factory=list)   # extra Host headers (besides localhost/bind host)
+    dashboard_cookie_secure: bool = False                                # set when served over https (tunnel -> false)
+    dashboard_session_hours: int = 12
+    retention_days: int = 90
+    ingest_poll_seconds: float = 1.0
     geoip_dir: Path | None = None
     abuseipdb_enabled: bool = False
     abuseipdb_key: str = ""
@@ -157,6 +162,11 @@ _ENV_MAP: dict[str, tuple[str, Any]] = {
     "DASHBOARD_PASSWORD": ("dashboard_password", str),
     "DASHBOARD_PASSWORD_HASH": ("dashboard_password_hash", str),
     "DASHBOARD_SECRET": ("dashboard_secret", str),
+    "DASHBOARD_ALLOWED_HOSTS": ("dashboard_allowed_hosts", _csv),
+    "DASHBOARD_COOKIE_SECURE": ("dashboard_cookie_secure", _truthy),
+    "DASHBOARD_SESSION_HOURS": ("dashboard_session_hours", int),
+    "RETENTION_DAYS": ("retention_days", int),
+    "INGEST_POLL_SECONDS": ("ingest_poll_seconds", float),
     "GEOIP_DIR": ("geoip_dir", Path),
     "ABUSEIPDB_ENABLED": ("abuseipdb_enabled", _truthy),
     "ABUSEIPDB_KEY": ("abuseipdb_key", str),
