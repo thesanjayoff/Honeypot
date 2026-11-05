@@ -27,7 +27,8 @@ from .services.fetcher_client import FetcherClient
 def build_context(name: str, settings=None) -> ServiceContext:
     s = settings or load_settings()
     events = EventWriter(name, s.events_dir, redactor=s.redactor(),
-                         max_per_ip_minute=s.max_events_per_ip_minute, max_dir_bytes=s.max_events_dir_bytes)
+                         max_per_ip_minute=s.max_events_per_ip_minute, max_dir_bytes=s.max_events_dir_bytes,
+                         alias_loopback=s.test_mode)
     q = Quarantine(s.quarantine_dir, s.max_file_bytes, s.max_quarantine_bytes)
     fetcher = FetcherClient(s.fetcher_url, s.fetcher_token) if s.fetcher_url else None
     return ServiceContext(s, events, q, fetcher, ConnectionLimiter(s.max_conns_total, s.max_conns_per_ip))

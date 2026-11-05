@@ -58,3 +58,21 @@ def ip_in(ip: str, nets: list) -> bool:
     if a is None:
         return False
     return any(a.version == n.version and a in n for n in nets)
+
+
+_ALIAS_BLOCKS = ("203.0.113.", "198.51.100.", "192.0.2.")
+
+
+def loopback_alias(ip: str) -> str:
+    """Test mode only: loopback aliases ``127.77.x.y`` stand in for distinct remote attackers.
+
+    Maps them onto the documentation ranges (RFC 5737) so a local simulator can look like hundreds of
+    different sources while every packet stays on loopback.  Any other address is returned unchanged.
+    """
+    if not ip.startswith("127.77."):
+        return ip
+    a = parse_ip(ip)
+    if a is None or a.version != 4:
+        return ip
+    n = ((a.packed[2] << 8) | a.packed[3]) % 762
+    return f"{_ALIAS_BLOCKS[n // 254]}{n % 254 + 1}"

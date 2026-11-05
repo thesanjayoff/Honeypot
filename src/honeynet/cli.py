@@ -156,7 +156,11 @@ def cmd_dev(args: argparse.Namespace) -> int:
     _logging(args.verbose)
     s = _test_settings(args)
     s.data_dir.mkdir(parents=True, exist_ok=True)
-    run_dev_stack(s, rate_per_min=args.rate, attacks=not args.no_attacks, backfill_hours=args.backfill, on_ready=lambda: serve(s))
+    def ready() -> None:
+        print(f"dashboard: http://127.0.0.1:{s.dashboard_port}/   ({'password required' if s.dashboard_password else 'test mode: no password'})  - Ctrl+C to stop")
+        serve(s)
+
+    run_dev_stack(s, rate_per_min=args.rate, attacks=not args.no_attacks, backfill_hours=args.backfill, on_ready=ready)
     return 0
 
 

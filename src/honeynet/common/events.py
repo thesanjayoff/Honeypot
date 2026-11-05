@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .netutil import normalize_ip
+from .netutil import normalize_ip, loopback_alias
 from .redact import NULL_REDACTOR, Redactor
 from .sanitize import sanitize_obj, sanitize_text
 
@@ -153,6 +153,7 @@ class EventWriter:
         max_per_ip_minute: int = 600,
         max_dir_bytes: int = 512 * 1024 * 1024,
         rotate_bytes: int = 32 * 1024 * 1024,
+        alias_loopback: bool = False,
     ) -> None:
         if not _SERVICE_RE.match(service):
             raise ValueError(f"bad service name {service!r}")
@@ -164,6 +165,7 @@ class EventWriter:
         self.max_per_ip_minute = max_per_ip_minute
         self.max_dir_bytes = max_dir_bytes
         self.rotate_bytes = rotate_bytes
+        self.alias_loopback = alias_loopback      # test mode: 127.77.x.y -> documentation-range addresses
         self._lock = threading.Lock()
         self._buckets: dict[str, _Bucket] = {}
         self._suppressed: dict[str, int] = {}
@@ -186,6 +188,8 @@ class EventWriter:
         **data: Any,
     ) -> Event | None:
         ip = normalize_ip(src_ip) or "0.0.0.0"
+        if self.alias_loopback:
+            ip = loopback_alias(ip)
         if self.redactor.is_ignored(ip):
             self.dropped_ignored += 1
             return None
