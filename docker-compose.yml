@@ -1,0 +1,236 @@
+# Personal honeypot network. Run on an ISOLATED VPS only - never on a home or office network.
+# Use deploy/deploy.sh (it prepares directories, moves your real sshd, applies the firewall, then runs this).
+#
+# Isolation model
+#   * every honeypot service is its own container: non-root, read-only root fs, all capabilities dropped,
+#     no-new-privileges, CPU/memory/pid limits, tmpfs /tmp mounted noexec
+#   * honeypots may only WRITE to their own event directory and the quarantine; they cannot see the dashboard,
+#     the analyzer or each other (separate event dirs, no shared secrets)
+#   * the analyzer runs with network_mode: none and a READ-ONLY quarantine mount; captured files are never executed
+#   * outbound traffic from honeypot containers is dropped by deploy/firewall.sh (DOCKER-USER chain); the optional
+#     fetcher is the one container with narrow, rate-limited egress
+#   * the dashboard is published on 127.0.0.1 only - reach it through an SSH tunnel
+
+x-hardening: &hardening
+  read_only: true
+  init: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  user: "10001:10001"
+  restart: unless-stopped
+  ulimits:
+    core: 0
+    nofile: { soft: 4096, hard: 4096 }
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+x-honeypot: &honeypot
+  <<: *hardening
+  image: honeynet/honeypot:local
+  build: { context: ., dockerfile: docker/Dockerfile, target: honeypot }
+  networks: [dmz, fetch]
+  mem_limit: 256m
+  memswap_limit: 256m
+  cpus: 0.5
+  pids_limit: 128
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+  environment: &honeypot-env
+    HONEYNET_DATA_DIR: /data
+    HONEYNET_CONFIG: /etc/honeynet/honeynet.yml
+    HONEYNET_IGNORE_SRC: ${ADMIN_IPS:-}
+    HONEYNET_FETCHER_URL: ${FETCHER_URL:-}
+    HONEYNET_FETCHER_TOKEN: ${HONEYNET_FETCHER_TOKEN:-}
+    HONEYNET_HEARTBEAT_DIR: /tmp
+  healthcheck: &honeypot-health
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 20s
+
+services:
+  # ------------------------------------------------------------------------------------- honeypots
+  ssh:
+    <<: *honeypot
+    container_name: honeynet-ssh
+    command: ["ssh"]
+    ports: ["${SSH_HOST_PORT:-22}:2222"]
+    volumes:
+      - ./config/honeynet.yml:/etc/honeynet/honeynet.yml:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/events/ssh:/data/events/ssh
+      - ${HONEYNET_DATA:-/srv/honeynet}/quarantine:/data/quarantine
+      - ${HONEYNET_DATA:-/srv/honeynet}/keys:/data/keys
+    healthcheck:
+      <<: *honeypot-health
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/hb-ssh')<60 else 1)"]
+
+  telnet:
+    <<: *honeypot
+    container_name: honeynet-telnet
+    command: ["telnet"]
+    ports: ["${TELNET_HOST_PORT:-23}:2323"]
+    volumes:
+      - ./config/honeynet.yml:/etc/honeynet/honeynet.yml:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/events/telnet:/data/events/telnet
+      - ${HONEYNET_DATA:-/srv/honeynet}/quarantine:/data/quarantine
+    healthcheck:
+      <<: *honeypot-health
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/hb-telnet')<60 else 1)"]
+
+  http:
+    <<: *honeypot
+    container_name: honeynet-http
+    command: ["http"]
+    ports: ["${HTTP_HOST_PORT:-80}:8080"]
+    volumes:
+      - ./config/honeynet.yml:/etc/honeynet/honeynet.yml:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/events/http:/data/events/http
+      - ${HONEYNET_DATA:-/srv/honeynet}/quarantine:/data/quarantine
+    healthcheck:
+      <<: *honeypot-health
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/hb-http')<60 else 1)"]
+
+  mysql:
+    <<: *honeypot
+    container_name: honeynet-mysql
+    command: ["mysql"]
+    ports: ["${MYSQL_HOST_PORT:-3306}:3306"]
+    volumes:
+      - ./config/honeynet.yml:/etc/honeynet/honeynet.yml:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/events/mysql:/data/events/mysql
+      - ${HONEYNET_DATA:-/srv/honeynet}/quarantine:/data/quarantine
+    healthcheck:
+      <<: *honeypot-health
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/hb-mysql')<60 else 1)"]
+
+  redis:
+    <<: *honeypot
+    container_name: honeynet-redis
+    command: ["redis"]
+    ports: ["${REDIS_HOST_PORT:-6379}:6379"]
+    volumes:
+      - ./config/honeynet.yml:/etc/honeynet/honeynet.yml:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/events/redis:/data/events/redis
+      - ${HONEYNET_DATA:-/srv/honeynet}/quarantine:/data/quarantine
+    healthcheck:
+      <<: *honeypot-health
+      test: ["CMD", "python", "-c", "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/hb-redis')<60 else 1)"]
+
+  # ------------------------------------------------------------------------------------- analysis
+  analyzer:
+    <<: *hardening
+    image: honeynet/analyzer:local
+    build: { context: ., dockerfile: docker/Dockerfile, target: analyzer }
+    container_name: honeynet-analyzer
+    network_mode: none                      # no network at all: captured files can never phone home
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.0
+    pids_limit: 64
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+    environment:
+      HONEYNET_DATA_DIR: /data
+      HONEYNET_CONFIG: /etc/honeynet/honeynet.yml
+    volumes:
+      - ./config/honeynet.yml:/etc/honeynet/honeynet.yml:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/quarantine:/data/quarantine:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/analysis:/data/analysis
+    healthcheck:
+      test: ["CMD", "python", "-c", "import honeynet"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+
+  # ------------------------------------------------------------------------------------- dashboard
+  dashboard:
+    <<: *hardening
+    image: honeynet/dashboard:local
+    build: { context: ., dockerfile: docker/Dockerfile, target: dashboard }
+    container_name: honeynet-dashboard
+    networks: [admin]
+    dns: [1.1.1.1, 9.9.9.9]
+    ports: ["127.0.0.1:${DASHBOARD_PORT:-8088}:8088"]       # loopback only - use: ssh -L 8088:127.0.0.1:8088 ...
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    environment:
+      HONEYNET_DATA_DIR: /data
+      HONEYNET_CONFIG: /etc/honeynet/honeynet.yml
+      HONEYNET_DASHBOARD_HOST: 0.0.0.0
+      HONEYNET_DASHBOARD_PORT: "8088"
+      HONEYNET_DASHBOARD_PASSWORD_HASH: ${HONEYNET_DASHBOARD_PASSWORD_HASH:-}   # empty = dashboard refuses to start (deploy.sh sets it)
+      HONEYNET_IGNORE_SRC: ${ADMIN_IPS:-}
+      HONEYNET_GEOIP_DIR: /geoip
+      HONEYNET_ABUSEIPDB_ENABLED: ${HONEYNET_ABUSEIPDB_ENABLED:-0}
+      HONEYNET_ABUSEIPDB_KEY: ${HONEYNET_ABUSEIPDB_KEY:-}
+      HONEYNET_BAZAAR_ENABLED: ${HONEYNET_BAZAAR_ENABLED:-0}
+      HONEYNET_BAZAAR_KEY: ${HONEYNET_BAZAAR_KEY:-}
+      HONEYNET_WEBHOOK_URL: ${HONEYNET_WEBHOOK_URL:-}
+      HONEYNET_SMTP_HOST: ${HONEYNET_SMTP_HOST:-}
+      HONEYNET_SMTP_PORT: ${HONEYNET_SMTP_PORT:-587}
+      HONEYNET_SMTP_USER: ${HONEYNET_SMTP_USER:-}
+      HONEYNET_SMTP_PASSWORD: ${HONEYNET_SMTP_PASSWORD:-}
+      HONEYNET_SMTP_FROM: ${HONEYNET_SMTP_FROM:-}
+      HONEYNET_SMTP_TO: ${HONEYNET_SMTP_TO:-}
+    volumes:
+      - ./config/honeynet.yml:/etc/honeynet/honeynet.yml:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/events:/data/events:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/analysis:/data/analysis:ro
+      - ${HONEYNET_DATA:-/srv/honeynet}/db:/data/db
+      - ${HONEYNET_DATA:-/srv/honeynet}/reports:/data/reports
+      - ./geoip:/geoip:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8088/healthz', timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 20s
+
+  # ------------------------------------------------------------------------------------- optional fetcher
+  # docker compose --profile fetcher up -d     (and ENABLE_FETCHER=1 so deploy/firewall.sh opens its egress)
+  fetcher:
+    <<: *hardening
+    image: honeynet/fetcher:local
+    build: { context: ., dockerfile: docker/Dockerfile, target: fetcher }
+    container_name: honeynet-fetcher
+    profiles: ["fetcher"]
+    networks: [fetch, egress]
+    dns: [1.1.1.1, 9.9.9.9]
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=1777
+    environment:
+      HONEYNET_DATA_DIR: /data
+      HONEYNET_FETCHER_TOKEN: ${HONEYNET_FETCHER_TOKEN:-}     # the fetcher refuses to start without one
+      HONEYNET_MAX_FILE_BYTES: "10485760"
+    volumes:
+      - ./config/honeynet.yml:/etc/honeynet/honeynet.yml:ro
+
+networks:
+  # honeypots: no internet (firewall.sh drops new connections from this subnet); containers cannot reach each other
+  dmz:
+    driver: bridge
+    ipam: { config: [{ subnet: 172.28.10.0/24 }] }
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+  # honeypots <-> fetcher requests only; internal = no route out
+  fetch:
+    driver: bridge
+    internal: true
+    ipam: { config: [{ subnet: 172.28.40.0/24 }] }
+  # fetcher only: narrow, rate-limited egress (see firewall.sh)
+  egress:
+    driver: bridge
+    ipam: { config: [{ subnet: 172.28.20.0/24 }] }
+  # dashboard: no internet unless DASHBOARD_EGRESS_HOSTS is set
+  admin:
+    driver: bridge
+    ipam: { config: [{ subnet: 172.28.30.0/24 }] }

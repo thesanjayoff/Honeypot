@@ -1,0 +1,39 @@
+# Non-secret settings, shared (read-only) by every container.  deploy/deploy.sh copies this to
+# config/honeynet.yml the first time.  Secrets (passwords, API keys, webhook URL) are NOT read from this
+# file - they come from .env through the container environment.
+
+# --- per-connection and per-IP limits (anti-abuse; attacker input is always treated as hostile) --------------
+max_session_seconds: 300        # hard cap on any session
+max_idle_seconds: 60
+max_conns_total: 200            # per service container
+max_conns_per_ip: 8
+max_file_bytes: 10485760        # largest single file kept in quarantine (10 MB)
+max_quarantine_bytes: 2147483648  # quarantine total cap (2 GB); oldest data is never overwritten, new files are refused
+max_http_body: 1048576
+max_events_per_ip_minute: 600   # a flood is summarised in a log.suppressed event instead of filling the disk
+max_events_dir_bytes: 536870912
+
+# --- behaviour ----------------------------------------------------------------------------------------------
+ssh_accept_pct: 12              # % of unknown user/password pairs that "work" (weak defaults always work)
+
+# --- ports INSIDE the containers (the host side is set in .env; do not change unless you also edit compose) ---
+ports:
+  ssh: [2222]
+  telnet: [2323]
+  http: [8080]
+  mysql: [3306]
+  redis: [6379]
+
+# --- dashboard ----------------------------------------------------------------------------------------------
+retention_days: 90              # events, sessions and alerts older than this are pruned (samples + IOCs are kept)
+dashboard_session_hours: 12
+alert_cooldown_seconds: 600     # the same alert is not repeated inside this window
+spike_factor: 4.0               # alert when the last 5 minutes exceed 4x the 6h baseline ...
+spike_min_events: 60            # ... and at least this many events
+
+# --- analyzer -----------------------------------------------------------------------------------------------
+analysis_backend: builtin       # builtin (capstone/pyelftools/pefile) | command (your own reverse-engineering CLI, see README)
+# analysis_command: "/opt/tools/mytool"
+analysis_timeout: 60
+analysis_max_bytes: 26214400
+analysis_poll_seconds: 5

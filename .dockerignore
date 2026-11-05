@@ -1,0 +1,10 @@
+.git
+.venv
+.devdata
+.pytmp
+.pytest_cache
+__pycache__
+*.pyc
+tests
+.env
+geoip

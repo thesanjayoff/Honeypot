@@ -9,3 +9,6 @@ data/
 *.mmdb
 config/honeynet.yml
 .pytmp/
+build/
+geoip/*
+!geoip/.gitkeep
