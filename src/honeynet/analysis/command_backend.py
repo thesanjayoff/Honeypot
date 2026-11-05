@@ -11,7 +11,7 @@ must be present in the analysis container, which has no network).  The program i
     <cmd> pseudo   <file> <address>       -> stdout: decompiler text; exit status 3 = unsupported
 
 Anything else on stdout/stderr is ignored.  A thin wrapper script around any disassembler or
-decompiler CLI (rizin/radare2, Ghidra headless, REA, IDA batch, ...) is enough.
+decompiler CLI (rizin/radare2, Ghidra headless, IDA batch, ...) is enough.
 """
 
 from __future__ import annotations
