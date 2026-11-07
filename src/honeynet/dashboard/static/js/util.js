@@ -106,6 +106,7 @@ export function duration(s) {
   if (s < 5400) return Math.round(s / 60) + "m";
   return (s / 3600).toFixed(1) + "h";
 }
+export function plural(n, word, many) { n = Number(n) || 0; return `${num(n)} ${n === 1 ? word : (many || word + "s")}`; }
 export function pct(x) { return Math.round((Number(x) || 0) * 100) + "%"; }
 export function short(s, n = 16) { s = String(s ?? ""); return s.length > n ? s.slice(0, n) + "…" : s; }
 

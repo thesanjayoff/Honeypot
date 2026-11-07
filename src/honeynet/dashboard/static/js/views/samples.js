@@ -28,7 +28,7 @@ export async function samples(root) {
       h("td", null, sampleLink(s.sha256)),
       h("td", null, s.family_name ? [safeText(s.family_name), " ", h("span", { class: "muted", text: pct(s.family_conf) })] : h("span", { class: "muted", text: "–" })),
       h("td", null, s.risk_level ? [levelBadge(s.risk_level), " ", h("span", { class: "muted num", text: s.risk_score })] : "–"),
-      h("td", { class: "muted", text: safeText([s.file_type, s.arch !== "unknown" ? s.arch : ""].filter(Boolean).join(" · ")) }),
+      h("td", { class: "muted", text: safeText([s.file_type, s.arch !== "unknown" ? s.arch : ""].filter(Boolean).join(", ")) }),
       h("td", { class: "num", text: bytes(s.size) }), h("td", { class: "num", text: num(s.count) }), h("td", { class: "num", text: num(s.sources) }),
       h("td", null, h("span", { class: `badge ${s.status === "failed" ? "high" : s.status === "pending" ? "medium" : "info"}`, text: STATUS_LABEL[s.status] || s.status }),
         s.bazaar && s.bazaar.known ? h("span", { class: "badge high", title: "MalwareBazaar knows this hash", text: " in MalwareBazaar" }) : null))));
@@ -43,7 +43,7 @@ function snippetBlock(rep, key) {
   if (!sn) return null;
   const hl = sn.highlight;
   return h("div", { class: "snippet" },
-    h("div", { class: "ttl", text: `${sn.kind} · ${safeText(sn.title || key)}` }),
+    h("div", { class: "ttl", text: `${sn.kind}: ${safeText(sn.title || key)}` }),
     h("pre", { tabindex: 0 }, sn.lines.map((ln, i) => h("span", { class: "ln" + (i === hl ? " hl" : "") }, ...visible(ln), "\n"))));
 }
 
@@ -99,9 +99,9 @@ export async function sample(root, ctx) {
   const fam = rep && rep.family;
   const kvEl = h("dl", { class: "kv" },
     hashRow("SHA-256", d.sha256), hashRow("MD5", (rep && rep.md5) || (d.md5 && !/^0+$/.test(d.md5) ? d.md5 : "")), hashRow("SHA-1", rep && rep.sha1),
-    h("dt", { text: "File" }), h("dd", { text: safeText(rep ? `${rep.file.description} · ${rep.file.arch !== "unknown" ? rep.file.arch + " · " : ""}${bytes(rep.size)}${rep.truncated ? " (truncated for analysis)" : ""}` : `${d.file_type || "unknown"} · ${bytes(d.size)}`) }),
+    h("dt", { text: "File" }), h("dd", { text: safeText(rep ? `${rep.file.description}, ${rep.file.arch !== "unknown" ? rep.file.arch + ", " : ""}${bytes(rep.size)}${rep.truncated ? " (truncated for analysis)" : ""}` : `${d.file_type || "unknown"}, ${bytes(d.size)}`) }),
     h("dt", { text: "Seen" }), h("dd", { text: `${num(d.count)}× between ${dateTime(d.first_seen)} and ${dateTime(d.last_seen)}` }),
-    h("dt", { text: "MalwareBazaar" }), h("dd", null, bz ? (bz.known ? [h("span", { class: "badge high", text: "known" }), " ", safeText([bz.signature, bz.file_type, (bz.tags || []).join(" ")].filter(Boolean).join(" · "))] : h("span", { class: "badge benign", text: "not found (hash-only lookup)" })) : "not checked",
+    h("dt", { text: "MalwareBazaar" }), h("dd", null, bz ? (bz.known ? [h("span", { class: "badge high", text: "known" }), " ", safeText([bz.signature, bz.file_type, (bz.tags || []).join(" ")].filter(Boolean).join(", "))] : h("span", { class: "badge benign", text: "not found (hash-only lookup)" })) : "not checked",
       d.bazaar_enabled ? [" ", h("button", { class: "ghost", text: "look up hash", onclick: async () => { try { await api(`/api/samples/${sha}/lookup`, { method: "POST", json: {} }); toast("Lookup queued - the file itself is never uploaded"); } catch (e) { toast(e.message); } } })] : [" ", h("span", { class: "muted", text: "(optional; off - set HONEYNET_BAZAAR_ENABLED + key)" })]));
 
   mount(head,
@@ -148,8 +148,8 @@ export async function sample(root, ctx) {
             h("dt", { text: "Entry point" }), h("dd", { class: "mono", text: rep.file.entry ? "0x" + rep.file.entry.toString(16) : "–" }),
             h("dt", { text: "Linking" }), h("dd", { text: `${rep.file.static ? "static" : "dynamic"}${rep.file.stripped ? ", stripped" : ""}${rep.file.interpreter ? ", " + rep.file.interpreter : ""}` }),
             h("dt", { text: "Libraries" }), h("dd", { text: safeText((rep.file.libraries || []).join(", ") || "none") }),
-            h("dt", { text: "Backend" }), h("dd", { text: safeText(`${rep.backend.name} (${rep.backend.version}) · ${rep.backend.instructions} instructions, ${rep.backend.syscall_sites} syscall sites`) }),
-            h("dt", { text: "Analysis" }), h("dd", { text: `${rep.analysis_ms} ms · static only · sample never executed` })),
+            h("dt", { text: "Backend" }), h("dd", { text: safeText(`${rep.backend.name} (${rep.backend.version}), ${rep.backend.instructions} instructions, ${rep.backend.syscall_sites} syscall sites`) }),
+            h("dt", { text: "Analysis" }), h("dd", { text: `${rep.analysis_ms} ms, static analysis only, the sample was never executed` })),
           rep.errors && rep.errors.length ? h("p", { class: "muted", text: "Notes: " + safeText(rep.errors.join("; ")) }) : null),
         h("section", { class: "card" }, h("header", null, h("h2", { text: "Entropy" }), h("span", { class: "sub", text: `overall ${rep.entropy.overall} (0-8; above ~7.2 looks compressed or encrypted)` })),
           rep.entropy.profile.length > 1 ? miniColumns(rep.entropy.profile, { max: 8, height: 90, label: "entropy (bits/byte)", marks: { threshold: 7.2 } }) : emptyState("File too small for a profile"))));
@@ -173,7 +173,7 @@ export async function sample(root, ctx) {
     { label: "When", render: (x) => h("span", { title: dateTime(x.ts), text: ago(x.ts) }) }, { label: "Source", render: (x) => ipLink(x.src_ip) },
     { label: "Service", render: (x) => svcTag(x.service) }, { label: "How", render: (x) => safeText(`${x.origin}${x.via ? " / " + x.via : ""}`) },
     { label: "URL / path", cls: "mono break", render: (x) => safeText(short(x.url || x.path || "", 120)) },
-    { label: "", render: (x) => (x.session ? sessionLink(x.session, "session ▸") : "") }], rows);
+    { label: "", render: (x) => (x.session ? sessionLink(x.session, "Open session") : "") }], rows);
   const srcBody = h("div");
   const SHOW = 12;
   if (!d.sources.length) mount(srcBody, emptyState("No source recorded"));

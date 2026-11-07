@@ -1,4 +1,4 @@
-import { h, mount, clear, api, qs, num, dateTime, clock, ago, duration, safeText, visible, ipLink, sessionLink, sampleLink, svcTag, clsBadge, attackLink, emptyState, bytes, short } from "../util.js";
+import { h, mount, clear, api, qs, num, dateTime, clock, ago, duration, safeText, visible, ipLink, sessionLink, sampleLink, svcTag, clsBadge, attackLink, emptyState, bytes, short, plural } from "../util.js";
 import { table, miniColumns, hbars } from "../charts.js";
 
 // ---------------------------------------------------------------------------- list
@@ -29,7 +29,7 @@ export async function sessions(root, ctx) {
       h("td", { class: "mono break", text: safeText(s.username ? `${s.username}:${s.password || ""}` : (s.method || "")) }),
       h("td", { class: "muted", text: safeText(short(s.client || "", 28)) }),
       h("td", { text: duration(s.duration) }), h("td", { class: "num", text: num(s.commands + s.queries) }), h("td", { class: "num", text: num(s.files) }),
-      h("td", null, clsBadge(s.classification)), h("td", null, sessionLink(s.id, "replay ▸")))));
+      h("td", null, clsBadge(s.classification)), h("td", null, sessionLink(s.id, "Replay")))));
     offset += rows.length;
     more.classList.toggle("hidden", rows.length < PAGE);
     more.disabled = false;
@@ -96,7 +96,7 @@ export async function session(root, ctx) {
   }
   function addFrame(f) {
     for (const ln of frameLines(f, s)) {
-      if (ln.cls === "sample") { if (ln.sha) term.append(h("div", { class: "meta" }, "   ↳ ", sampleLink(ln.sha, "view analysis ▸"))); continue; }
+      if (ln.cls === "sample") { if (ln.sha) term.append(h("div", { class: "meta" }, "   ↳ ", sampleLink(ln.sha, "view analysis"))); continue; }
       term.append(h("div", { class: ln.cls }, ...(ln.prompt !== undefined
         ? [h("span", { class: "prompt" }, ...visible(ln.prompt)), h("span", { class: "cmd" }, ...visible(ln.text))] : visible(ln.text))));
     }
@@ -122,14 +122,14 @@ export async function session(root, ctx) {
   ctx.onCleanup(stop);
 
   const info = h("dl", { class: "kv" },
-    h("dt", { text: "Source" }), h("dd", null, ipLink(s.src_ip), " ", s.country_name ? `· ${s.country_name}` : "", s.org ? ` · ${safeText(s.org)}` : ""),
+    h("dt", { text: "Source" }), h("dd", null, ipLink(s.src_ip), " ", [s.country_name, s.org].filter(Boolean).map(safeText).join(", ")),
     h("dt", { text: "Service" }), h("dd", null, svcTag(s.service), ` port ${s.dst_port ?? "?"}`),
     h("dt", { text: "Started" }), h("dd", { text: `${dateTime(s.first_ts)} (${duration(s.duration)})` }),
     h("dt", { text: "Login" }), h("dd", { class: "mono", text: safeText(s.username ? `${s.username} / ${s.password || ""}  (${s.method || ""})` : "none") }),
     h("dt", { text: "Client" }), h("dd", { class: "mono", text: safeText(s.client || "–") }),
     s.hassh ? [h("dt", { text: "HASSH" }), h("dd", { class: "mono", text: safeText(s.hassh) })] : null,
     h("dt", { text: "Class" }), h("dd", null, clsBadge(s.classification)),
-    h("dt", { text: "Activity" }), h("dd", { text: `${s.commands} commands · ${s.downloads} downloads · ${s.files} files · ${s.exploits} exploits · ${s.queries} queries` }));
+    h("dt", { text: "Activity" }), h("dd", { text: [[s.commands, "command"], [s.downloads, "download"], [s.files, "file"], [s.exploits, "exploit"], [s.queries, "query", "queries"]].filter(([n]) => n).map(([n, w, m]) => plural(n, w, m)).join(", ") || "nothing recorded" }));
 
   mount(root,
     h("div", { class: "crumbs" }, h("a", { href: "#/sessions", text: "Sessions" }), " / ", h("span", { class: "mono", text: sid })),
@@ -143,7 +143,7 @@ export async function session(root, ctx) {
       h("div", { class: "grid" },
         h("section", { class: "card" }, h("header", null, h("h2", { text: "Details" })), info),
         h("section", { class: "card" }, h("header", null, h("h2", { text: "MITRE ATT&CK" })),
-          (s.attack || []).length ? (s.attack || []).map((a) => h("div", null, attackLink(a.id), " ", safeText(a.name), h("span", { class: "muted", text: `  ×${a.n} · ${a.tactic}` }))) : emptyState("No techniques mapped")))));
+          (s.attack || []).length ? (s.attack || []).map((a) => h("div", { class: "techrow" }, attackLink(a.id), h("span", { text: safeText(a.name) }), h("span", { class: "muted", text: `seen ${plural(a.n, "time")}, ${safeText(a.tactic)}` }))) : emptyState("No techniques mapped")))));
   paint(frames.length);
 }
 
@@ -160,8 +160,8 @@ export async function ipProfile(root, ctx) {
       h("section", { class: "card" }, h("header", null, h("h2", { text: "Profile" })), h("dl", { class: "kv" },
         h("dt", { text: "Location" }), h("dd", { text: safeText([i.city, i.country_name || i.country].filter(Boolean).join(", ") || "unknown") }),
         h("dt", { text: "Network" }), h("dd", { text: safeText(i.asn ? `AS${i.asn} ${i.org || ""}` : i.org || "unknown") }),
-        h("dt", { text: "First / last seen" }), h("dd", { text: `${dateTime(i.first_seen)} → ${dateTime(i.last_seen)}` }),
-        h("dt", { text: "Volume" }), h("dd", { text: `${num(i.events)} events · ${num(i.conns)} connections · ${num(i.auth)} logins tried · ${num(i.cmds)} commands · ${num(i.exploits)} exploits · ${num(i.files)} files` }),
+        h("dt", { text: "First / last seen" }), h("dd", { text: `${dateTime(i.first_seen)} to ${dateTime(i.last_seen)}` }),
+        h("dt", { text: "Volume" }), h("dd", { text: [plural(i.events, "event"), plural(i.conns, "connection"), `${num(i.auth)} logins tried`, plural(i.cmds, "command"), plural(i.exploits, "exploit"), plural(i.files, "file")].join(", ") }),
         h("dt", { text: "Services hit" }), h("dd", null, (i.services || []).map((s) => svcTag(s)).flatMap((n) => [n, " "])),
         h("dt", { text: "Ports" }), h("dd", { class: "mono", text: (i.ports || []).join(", ") }),
         h("dt", { text: "AbuseIPDB" }), h("dd", { text: i.abuse_score == null ? "not checked (optional, off by default)" : `${i.abuse_score}% confidence of abuse (checked ${ago(i.abuse_checked)})` }))),
@@ -177,7 +177,7 @@ export async function ipProfile(root, ctx) {
     h("section", { class: "card flush", style: { "margin-top": "14px" } }, h("header", null, h("h2", { text: "Sessions" })),
       table([{ label: "When", render: (s) => h("span", { title: dateTime(s.first_ts), text: ago(s.first_ts) }) }, { label: "Service", render: (s) => svcTag(s.service) },
         { label: "Login", cls: "mono", render: (s) => safeText(s.username ? `${s.username}:${s.password || ""}` : "") }, { label: "Cmds", num: true, render: (s) => s.commands + s.queries },
-        { label: "", render: (s) => sessionLink(s.id, "replay ▸") }], p.sessions)),
+        { label: "", render: (s) => sessionLink(s.id, "Replay") }], p.sessions)),
     p.commands.length ? h("section", { class: "card", style: { "margin-top": "14px" } }, h("header", null, h("h2", { text: "Commands" })),
       h("div", { class: "term" }, p.commands.map((c) => h("div", null, h("span", { class: "meta", text: clock(c.ts) + "  " }), h("span", { class: "cmd" }, ...visible(c.input)))))) : null,
     p.samples.length ? h("section", { class: "card", style: { "margin-top": "14px" } }, h("header", null, h("h2", { text: "Files dropped" })),

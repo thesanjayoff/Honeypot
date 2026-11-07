@@ -14,7 +14,7 @@ export async function attack(root, ctx) {
   const seen = d.tactics.flatMap((t) => t.techniques).filter((x) => x.n > 0).length;
   mount(root,
     h("div", { class: "page-head" }, h("h1", { text: "MITRE ATT&CK" }),
-      h("span", { class: "sub", text: `${seen} techniques observed in the last ${hours >= 48 ? Math.round(hours / 24) + " days" : hours + " hours"} · ${num(d.total)} total hits` })),
+      h("span", { class: "sub", text: `${seen} techniques observed in the last ${hours >= 48 ? Math.round(hours / 24) + " days" : hours + " hours"}, ${num(d.total)} hits in all` })),
     h("p", { class: "muted", text: "Techniques are inferred from what attackers actually did in the honeypots (commands, exploit rules, scans, credential guessing). Darker = more hits. Click a technique to open it on attack.mitre.org." }),
     h("div", { class: "legend" }, ["transparent", "var(--seq-1)", "var(--seq-2)", "var(--seq-3)", "var(--seq-5)", "var(--seq-6)"].map((c, l) =>
       h("span", null, h("i", { class: "swatch", style: { background: c, border: "1px solid var(--axis)" } }), l === 0 ? "none" : l === 5 ? `${compact(max)}+ hits` : ""))),
@@ -96,8 +96,8 @@ export async function alerts(root, ctx) {
     mount(list, d.alerts.length ? d.alerts.map((a) => h("div", { class: "alert-row" + (a.acked ? " acked" : "") },
       h("span", { class: "muted nowrap", title: dateTime(a.ts), text: ago(a.ts) }), levelBadge(a.severity),
       h("div", null, h("strong", { text: safeText(a.title) }), h("div", { class: "body ink2" }, ...visible(a.detail)),
-        h("span", { class: "muted", text: `${a.kind} · ${a.delivered ? "delivered" : "not delivered"}` }),
-        /^[0-9a-f]{64}$/.test(a.key || "") ? [" · ", h("a", { href: `#/sample/${a.key}`, text: "open sample" })] : null),
+        h("span", { class: "muted", text: `${a.kind}, ${a.delivered ? "delivered" : "not delivered"}` }),
+        /^[0-9a-f]{64}$/.test(a.key || "") ? [", ", h("a", { href: `#/sample/${a.key}`, text: "open sample" })] : null),
       a.acked ? h("span", { class: "muted", text: "acknowledged" }) : h("button", { text: "Acknowledge", onclick: async () => { await api("/api/alerts/ack", { method: "POST", json: { id: a.id } }); load(); } }))) : emptyState("No alerts yet"));
   }
   mount(root,
@@ -114,7 +114,7 @@ export async function system(root) {
   const [hl, cf] = await Promise.all([api("/api/health"), api("/api/config")]);
   const yesno = (v, on = "enabled", off = "off") => h("span", { class: `badge ${v ? "benign" : "unknown"}`, text: v ? on : off });
   mount(root,
-    h("div", { class: "page-head" }, h("h1", { text: "System" }), h("span", { class: "sub", text: `honeynet ${safeText(cf.version)}${cf.test_mode ? " · TEST MODE" : ""}` })),
+    h("div", { class: "page-head" }, h("h1", { text: "System" }), h("span", { class: "sub", text: `honeynet ${safeText(cf.version)}${cf.test_mode ? " (test mode)" : ""}` })),
     cf.test_mode ? h("section", { class: "card", style: { "margin-bottom": "14px", "border-color": "var(--warn)" } }, h("strong", { text: "Test mode. " }),
       "Documentation-range addresses are accepted as attackers, locations are simulated and the dashboard may run without a password. Never use test mode on a public host.") : null,
     h("div", { class: "grid g2" },
