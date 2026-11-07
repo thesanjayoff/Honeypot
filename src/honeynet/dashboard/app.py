@@ -37,7 +37,7 @@ from .ingest import Ingestor
 from .samples import SHA_RE, AnalysisImporter, load_report
 
 # Windows registries sometimes map .js to text/plain, which breaks module scripts under nosniff
-for _ext, _mt in ((".js", "text/javascript"), (".css", "text/css"), (".json", "application/json"), (".svg", "image/svg+xml")):
+for _ext, _mt in ((".js", "text/javascript"), (".css", "text/css"), (".json", "application/json"), (".svg", "image/svg+xml"), (".woff2", "font/woff2")):
     mimetypes.add_type(_mt, _ext)
 
 log = logging.getLogger("honeynet.dashboard")

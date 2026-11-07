@@ -155,7 +155,7 @@ function stamp(t, bucket, long) {
 
 // ---------------------------------------------------------------------------- horizontal bars (top-N)
 // rows: [{key, name?, n, ips?}]; link(row) -> href or null; fmt for the value; color for the fill
-export function hbars(rows, { link, color = "var(--accent)", unit = "", label, sub, fmt = num, serviceKeys = false } = {}) {
+export function hbars(rows, { link, color = "var(--data)", unit = "", label, sub, fmt = num, serviceKeys = false } = {}) {
   if (!rows || !rows.length) return h("div", { class: "empty", text: "Nothing yet" });
   const max = Math.max(1, ...rows.map((r) => r.n));
   return h("div", { class: "hbars", role: "list" }, rows.map((r) => {
@@ -174,7 +174,7 @@ export function hbars(rows, { link, color = "var(--accent)", unit = "", label, s
 }
 
 // ---------------------------------------------------------------------------- small column chart (entropy profile etc.)
-export function miniColumns(values, { max, height = 70, label = "value", fmt = (v) => v.toFixed(2), color = "var(--accent)", marks = {} } = {}) {
+export function miniColumns(values, { max, height = 70, label = "value", fmt = (v) => v.toFixed(2), color = "var(--data)", marks = {} } = {}) {
   const vmax = max || Math.max(...values, 1);
   const W = Math.max(320, values.length * 10), H = height, bw = Math.min(14, (W / values.length) - 2);
   const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img", "aria-label": `${label} profile, ${values.length} blocks`, preserveAspectRatio: "none" });

@@ -573,5 +573,9 @@ def test_static_files_served_with_module_safe_types(client):
     assert client.get("/js/util.js").status_code == 200
     assert client.get("/style.css").headers["content-type"].startswith("text/css")
     assert client.get("/vendor/countries-110m.json").status_code == 200
+    for font in ("instrument-sans", "jetbrains-mono"):             # fonts are self-hosted: nothing is loaded from other sites
+        r = client.get(f"/vendor/fonts/{font}.woff2")
+        assert r.status_code == 200 and r.headers["content-type"] == "font/woff2" and r.content[:4] == b"wOF2"
+    assert "font-src 'self'" in client.get("/").headers["content-security-policy"]
     assert client.get("/").text.count("<script") == 1
     assert client.get("/../../etc/passwd").status_code in (400, 404)

@@ -58,7 +58,7 @@ export async function overview(root, ctx) {
     tilesEl,
     h("div", { class: "grid g-map" },
       h("section", { class: "card flush" }, h("header", null, h("h2", { text: "Attack sources" }), h("span", { class: "sub", text: "where connections come from" })), mapHost),
-      h("section", { class: "card" }, h("header", null, h("h2", { text: "Live feed" }), h("div", { class: "tools" }, feedSeg)), feedEl)),
+      h("section", { class: "card feedcard" }, h("header", null, h("h2", { text: "Live feed" }), h("div", { class: "tools" }, feedSeg)), feedEl)),
     h("section", { class: "card", style: { "margin-top": "14px" } },
       h("header", null, h("h2", { text: "Activity over time" }), h("div", { class: "tools" }, metricSeg, timeTools)), timeBody),
     h("div", { class: "grid g3", style: { "margin-top": "14px" } },
