@@ -76,6 +76,8 @@ class Settings:
     retention_days: int = 90
     ingest_poll_seconds: float = 1.0
     geoip_dir: Path | None = None
+    home_lat: float | None = None          # optional: where YOUR honeypot server is, so the map can draw attack arcs into it
+    home_lon: float | None = None
     abuseipdb_enabled: bool = False
     abuseipdb_key: str = ""
     abuseipdb_daily_limit: int = 900
@@ -168,6 +170,8 @@ _ENV_MAP: dict[str, tuple[str, Any]] = {
     "RETENTION_DAYS": ("retention_days", int),
     "INGEST_POLL_SECONDS": ("ingest_poll_seconds", float),
     "GEOIP_DIR": ("geoip_dir", Path),
+    "HOME_LAT": ("home_lat", float),
+    "HOME_LON": ("home_lon", float),
     "ABUSEIPDB_ENABLED": ("abuseipdb_enabled", _truthy),
     "ABUSEIPDB_KEY": ("abuseipdb_key", str),
     "ABUSEIPDB_DAILY_LIMIT": ("abuseipdb_daily_limit", int),

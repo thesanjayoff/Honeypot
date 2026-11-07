@@ -67,6 +67,7 @@ Try it on harmless files only: `python -m honeynet analyze --once` after droppin
 
 Live attack map and event feed (SSE), time series, top countries/ASNs/usernames/passwords/commands/URLs/user agents, per-IP profiles, session replay (control characters shown as visible escapes, never interpreted), samples with full analysis report, IOC table, MITRE ATT&CK matrix coverage, alerts, light/dark theme, a table view for every chart.
 
+- **Map marker**: set `HONEYNET_HOME_LAT` / `HONEYNET_HOME_LON` (or `home_lat` / `home_lon` in `config/honeynet.yml`) to where your server sits and live events fly into it as arcs. Unset, nothing about your location is shown. Coordinates are rounded to about 1 km.
 - **Enrichment**: offline GeoLite2 (City + ASN `.mmdb` in `./geoip`, free MaxMind account). Optional AbuseIPDB reputation toggle (`HONEYNET_ABUSEIPDB_ENABLED=1` + key): only IP addresses are sent.
 - **Exports** (`/api/export/...` and `python -m honeynet export ...`): blocklist as txt/csv/json/ipset/iptables/nft/ufw/pf, IOC feeds as JSON/CSV, C2 indicators, daily summary in Markdown/HTML. Your own IPs and any secrets are redacted from everything.
 - **Alerts** (webhook and/or SMTP): first sighting of a sample, first sighting of a new exploit signature, traffic spikes vs. the 6 h baseline. Cooldowns prevent floods.

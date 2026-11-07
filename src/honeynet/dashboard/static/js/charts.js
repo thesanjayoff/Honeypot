@@ -155,16 +155,20 @@ function stamp(t, bucket, long) {
 
 // ---------------------------------------------------------------------------- horizontal bars (top-N)
 // rows: [{key, name?, n, ips?}]; link(row) -> href or null; fmt for the value; color for the fill
-export function hbars(rows, { link, color = "var(--data)", unit = "", label, sub, fmt = num, serviceKeys = false } = {}) {
+export function hbars(rows, { link, color = "var(--data)", unit = "", label, sub, fmt = num, serviceKeys = false, mono = false } = {}) {
   if (!rows || !rows.length) return h("div", { class: "empty", text: "Nothing yet" });
   const max = Math.max(1, ...rows.map((r) => r.n));
   return h("div", { class: "hbars", role: "list" }, rows.map((r) => {
     const href = link ? link(r) : null;
-    const name = label ? label(r) : (r.name ? `${r.key} · ${r.name}` : String(r.key));
+    // label(r) may return "text" or ["main text", "quieter second part"]
+    const l = label ? label(r) : (r.name ? [r.name, r.key] : String(r.key));
+    const [main, second] = Array.isArray(l) ? l : [l, ""];
+    const full = safeText(second ? `${main} ${second}` : main);
     const fill = h("i", { class: "fill", style: { width: Math.max(0.6, (r.n / max) * 100) + "%", background: serviceKeys ? svcColor(r.key) : color } });
-    const node = h(href ? "a" : "div", { class: "hbar", role: "listitem", tabindex: href ? undefined : 0, href: href || undefined },
-      h("span", { class: "name", text: safeText(name) }), h("span", { class: "track" }, fill), h("span", { class: "val", text: fmt(r.n) }));
-    const show = (x, y) => showTip(x, y, safeText(name), [{ label: unit || "count", value: fmt(r.n) }].concat(r.ips != null ? [{ label: "distinct IPs", value: num(r.ips) }] : [], sub ? sub(r) : []));
+    const node = h(href ? "a" : "div", { class: "hbar", role: "listitem", tabindex: href ? undefined : 0, href: href || undefined, title: full },
+      h("span", { class: "name" + (mono ? " mono" : "") }, safeText(main), second ? h("span", { class: "sub", text: safeText(second) }) : null),
+      h("span", { class: "track" }, fill), h("span", { class: "val", text: fmt(r.n) }));
+    const show = (x, y) => showTip(x, y, full, [{ label: unit || "count", value: fmt(r.n) }].concat(r.ips != null ? [{ label: "distinct IPs", value: num(r.ips) }] : [], sub ? sub(r) : []));
     node.addEventListener("pointermove", (e) => show(e.clientX, e.clientY));
     node.addEventListener("pointerleave", hideTip);
     node.addEventListener("focus", () => { const b = node.getBoundingClientRect(); show(b.left + 40, b.top + 8); });

@@ -579,3 +579,24 @@ def test_static_files_served_with_module_safe_types(client):
     assert "font-src 'self'" in client.get("/").headers["content-security-policy"]
     assert client.get("/").text.count("<script") == 1
     assert client.get("/../../etc/passwd").status_code in (400, 404)
+
+
+# ----------------------------------------------------------------------------- map home marker
+
+def test_home_point_only_when_configured_or_test_mode():
+    from honeynet.common.config import Settings, load_settings
+    from honeynet.dashboard.app import home_point
+
+    assert home_point(Settings()) is None                                    # production default: nothing is revealed
+    assert home_point(Settings(test_mode=True)) == {"lat": 50.11, "lon": 8.68}
+    assert home_point(Settings(home_lat=48.1234, home_lon=11.5678)) == {"lat": 48.12, "lon": 11.57}   # coarse on purpose
+    assert home_point(Settings(home_lat=95.0, home_lon=10.0)) is None        # out of range is dropped
+    assert home_point(Settings(home_lat=40.0)) is None                       # needs both
+    s = load_settings({"HONEYNET_HOME_LAT": "52.52", "HONEYNET_HOME_LON": "13.4"})
+    assert (s.home_lat, s.home_lon) == (52.52, 13.4)
+
+
+def test_map_api_includes_home(client):
+    login(client)
+    r = client.get("/api/map?hours=24")
+    assert r.status_code == 200 and set(r.json()) == {"points", "home"}

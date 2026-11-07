@@ -41,6 +41,16 @@ for _ext, _mt in ((".js", "text/javascript"), (".css", "text/css"), (".json", "a
     mimetypes.add_type(_mt, _ext)
 
 log = logging.getLogger("honeynet.dashboard")
+
+
+def home_point(s: Settings) -> dict[str, float] | None:
+    """Where the honeypot itself sits (for the map's arcs). Only shown when configured; test mode uses a made-up place."""
+    lat, lon = s.home_lat, s.home_lon
+    if lat is None or lon is None:
+        lat, lon = (50.11, 8.68) if s.test_mode else (None, None)
+    if lat is None or lon is None or not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return {"lat": round(float(lat), 2), "lon": round(float(lon), 2)}
 STATIC_DIR = Path(__file__).parent / "static"
 IP_RE = re.compile(r"^[0-9a-fA-F:.]{2,45}$")
 SESSION_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
@@ -253,7 +263,9 @@ def create_app(s: Settings, *, start_background: bool = True) -> FastAPI:
 
     @app.get("/api/map", dependencies=A)
     def map_(hours: float = Query(24, gt=0, le=24 * 365)) -> dict:
-        return q.map_points(svc.db, *rng(hours))
+        res = q.map_points(svc.db, *rng(hours))
+        res["home"] = home_point(s)
+        return res
 
     @app.get("/api/events", dependencies=A)
     def events(limit: int = Query(100, ge=1, le=500), before: float | None = None, service: str | None = Query(None, max_length=32),
