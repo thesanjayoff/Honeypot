@@ -105,6 +105,7 @@ function buildShell() {
   const main = h("main", { id: "main", tabindex: -1 });
 
   mount(app, h("div", { class: "shell" },
+    h("button", { class: "skip", text: "Skip to content", onclick: () => main.focus() }),
     h("aside", { class: "rail" },
       h("a", { class: "brand", href: "#/", "aria-label": "honeynet overview" }, logo(), h("span", { text: "honeynet" })), nav,
       h("div", { class: "rail-foot" },

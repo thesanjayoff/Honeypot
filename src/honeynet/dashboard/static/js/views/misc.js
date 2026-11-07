@@ -15,7 +15,7 @@ export async function attack(root, ctx) {
   mount(root,
     h("div", { class: "page-head" }, h("h1", { text: "MITRE ATT&CK" }),
       h("span", { class: "sub", text: `${seen} techniques observed in the last ${hours >= 48 ? Math.round(hours / 24) + " days" : hours + " hours"}, ${num(d.total)} hits in all` })),
-    h("p", { class: "muted", text: "Techniques are inferred from what attackers actually did in the honeypots (commands, exploit rules, scans, credential guessing). Darker = more hits. Click a technique to open it on attack.mitre.org." }),
+    h("p", { class: "muted", text: "Techniques are inferred from what attackers actually did in the honeypots (commands, exploit rules, scans, credential guessing). A stronger colour and a bigger number mean more hits. Click a technique to open it on attack.mitre.org." }),
     h("div", { class: "legend" }, ["transparent", "var(--seq-1)", "var(--seq-2)", "var(--seq-3)", "var(--seq-5)", "var(--seq-6)"].map((c, l) =>
       h("span", null, h("i", { class: "swatch", style: { background: c, border: "1px solid var(--axis)" } }), l === 0 ? "none" : l === 5 ? `${compact(max)}+ hits` : ""))),
     h("div", { class: "matrix" }, d.tactics.map((t) => h("div", { class: "col" },
